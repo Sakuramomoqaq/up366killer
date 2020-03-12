@@ -1,7 +1,4 @@
 var rate = 1;  // 正确率
-
-// ---不要乱动下面的代码---------------------------------------------------------------
-
 var notification = '等待中';
 var root = '/sdcard/Up366Mobile/flipbook/flipbooks/';
 files.removeDir(root);
