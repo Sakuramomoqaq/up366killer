@@ -33,29 +33,28 @@ threads.start(function () {
 while (true) {
     try {
         notification = '等待中'
-        if (text('交卷').exists()) {
+        if (desc('交卷').exists()) {
             notification = '正在搜索';
             sleep(1000);
-            var T1 = textMatches(/^1\..*\?$/).findOne(1000).text().match(/^\d+\. (.*\?)$/)[1];
-            var T2 = textMatches(/^2\..*\?$/).findOne(1000).text().match(/^\d+\. (.*\?)$/)[1];
+            var T1 = descMatches(/^1\..*\?$/).findOne(1000).desc().match(/^\d+\. (.*\?)$/)[1];
+            var T2 = descMatches(/^2\..*\?$/).findOne(1000).desc().match(/^\d+\. (.*\?)$/)[1];
             var answer = dfs(root, T1, T2);
             if (answer) {
                 notification = '答案已就绪';
-                var answerText = extract(answer);
-                var decision = dialogs.confirm(answerText, '确定: 自动填写\n取消: 手动填写');
+                var decision = dialogs.confirm(answer, '确定: 自动填写\n取消: 手动填写');
                 if (decision) {
                     notification = '填写中...请勿触摸屏幕';
                     sleep(1000);
                     complete(answer);
-                    if(click('交卷')) {
+                    if(desc('交卷').click()) {
                         sleep(500);
-                        while(textStartsWith('确定要交卷吗').exists());
+                        while(descStartsWith('确定要交卷吗').exists());
                     }
                 } else {
                     toast('点击标题栏答案退出手动填写模式');
-                    answerText = answerText.replace(/([ABC]{5})/g, '$1 ');
-                    notification = answerText;
-                    while(notification == answerText);
+                    answer = answer.replace(/([ABC]{5})/g, '$1 ');
+                    notification = answer;
+                    while(notification == answer);
                 }
                 files.removeDir(root);
             } else {
@@ -69,35 +68,16 @@ while (true) {
     sleep(300);
 }
 
-function extract(answer) {
-    var str = '';
-    for (let i = 0; i < answer.length; i++) {
-        for (let j = 0; j < answer[i].length; j++) {
-            str += answer[i][j];
-        }
-    }
-    return str;
-}
-
 function dfs(dir, T1, T2) {
     var list = files.listDir(dir);
     if (~list.indexOf('page1.js')) {
         var text = files.read(dir + 'page1.js');
         if (~text.search(T1) && ~text.search(T2)) {
-            var answer = [];
-            eval(text);
-            for (let j = 0; j < pageConfig.questionList.length; j++) {
-                var q = pageConfig.questionList[j].questonObj;
-                if (q.answer_text != undefined) {
-                    answer[j] = [q.answer_text];
-                } else {
-                    answer[j] = [];
-                    for (let k = 0; k < q.questions_list.length; k++) {
-                        answer[j][k] = q.questions_list[k].answer_text;
-                    }
-                }
+            var answer = text.match(/"answer_text": ?"[ABC]"/g);
+            for (let i = 0; i < answer.length; i++) {
+                answer[i] = answer[i].slice(-2, -1);
             }
-            return answer;
+            return answer.join('');
         }
     }
     for (let i = 0; i < list.length; i++) {
@@ -113,20 +93,52 @@ function dfs(dir, T1, T2) {
 }
 
 function complete(answer) {
-    var q = 0;
-    for (let i = 0; i < answer.length; i++) {
-        for (let j = 0; j < answer[i].length; j++) {
-            q++;
-            var index = '#ABC'.indexOf(answer[i][j]);
-            if (random() > rate) {
-                var tidx = index;
-                while (index == tidx) {
-                    index = random(1, 3);
-                }
-            }
-            var ui_question = textMatches(new RegExp('^' + q + '\\..*\\?$')).findOne()
-            var ui_card = ui_question.parent();
-            ui_card.child(index+ui_question.indexInParent()).click();
+    function pIndex(view) {
+        if (view.parent().className() == 'android.webkit.WebView') {
+            return view.indexInParent();
         }
+        return view.indexInParent() + 100*pIndex(view.parent());
     }
+    var web = desc('听力风暴模板-mobile').findOne().children();
+    var child = web.find(descMatches(/^[ABC]\.$/)), list = [];
+    for (let i = 0; i < child.length; i++) {
+        list.push(child[i]);
+    }
+    sort(list, 0, list.length, function (a, b) {
+        return pIndex(a) < pIndex(b);
+    });
+    for (let i = 0; i < answer.length; i++) {
+        var index = 'ABC'.indexOf(answer[i]);
+        if (random() > rate) {
+            var tidx = index;
+            while (index == tidx) {
+                index = random(1, 3);
+            }
+        }
+        list[3*i + index].click();
+    }
+}
+
+function sort(arr, l, r, cmp){
+    if(l == r)
+        return;
+    var rnd = random(l, r-1);
+    var tmp = arr[l];
+    arr[l] = arr[rnd];
+    arr[rnd] = tmp;
+    var i = l, j = r-1;
+    while(i < j){
+        while(!cmp(arr[j], arr[l]) && j > i)
+            j--;
+        while(!cmp(arr[l], arr[i]) && i < j)
+            i++;
+        var tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+    }
+    tmp = arr[i];
+    arr[i] = arr[l];
+    arr[l] = tmp;
+    sort(arr, l, i, cmp); sort(arr, i+1, r, cmp);
+    return arr;
 }
